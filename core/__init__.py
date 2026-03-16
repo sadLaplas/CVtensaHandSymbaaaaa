@@ -1,0 +1,1 @@
+"""Базовые сервисы проекта CVtensaHandSymbaaaaa."""
