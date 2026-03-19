@@ -1,9 +1,9 @@
 .venv/
 __pycache__/
+.idea/
 *.pyc
 .DS_Store
 .streamlit/
-data/raw/
 data/processed/
 models/
 *.pyo
@@ -13,6 +13,9 @@ models/
 .ruff_cache/
 logs/
 *.log
+data/raw/*.csv
+data/raw/**/*.json
+data/raw/**/*.csv
 tmp/
 temp/
 build/

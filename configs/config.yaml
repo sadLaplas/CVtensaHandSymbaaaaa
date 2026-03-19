@@ -17,3 +17,15 @@ mediapipe:
 ui:
   window_title: CVtensaHandSymbaaaaa
   show_debug: true
+
+dataset:
+  raw_dir: data/raw
+  index_file: data/raw/dataset_index.csv
+  gesture_labels:
+    - open_palm
+    - fist
+    - peace
+    - thumbs_up
+  capture_interval_ms: 250
+  max_samples_per_label: 250
+  require_single_hand: true

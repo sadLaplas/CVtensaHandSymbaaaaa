@@ -50,6 +50,18 @@ class UIConfig:
 
 
 @dataclass(slots=True, frozen=True)
+class DatasetConfig:
+    """Параметры записи датасета landmarks."""
+
+    raw_dir: Path
+    index_file: Path
+    gesture_labels: tuple[str, ...]
+    capture_interval_ms: int
+    max_samples_per_label: int
+    require_single_hand: bool
+
+
+@dataclass(slots=True, frozen=True)
 class AppConfig:
     """Полная конфигурация приложения."""
 
@@ -58,6 +70,7 @@ class AppConfig:
     camera: CameraConfig
     mediapipe: HandTrackerConfig
     ui: UIConfig
+    dataset: DatasetConfig
 
 
 def get_default_config_path() -> Path:
@@ -93,6 +106,7 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     camera_section = _require_mapping(raw_config, "camera")
     mediapipe_section = _require_mapping(raw_config, "mediapipe")
     ui_section = _require_mapping(raw_config, "ui")
+    dataset_section = _optional_mapping(raw_config, "dataset")
 
     project_config = ProjectConfig(name=_require_non_empty_string(project_section, "name"))
     camera_config = CameraConfig(
@@ -120,6 +134,7 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
         window_title=_require_non_empty_string(ui_section, "window_title"),
         show_debug=_require_bool(ui_section, "show_debug"),
     )
+    dataset_config = _build_dataset_config(project_root, dataset_section)
 
     return AppConfig(
         project_root=project_root,
@@ -127,6 +142,7 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
         camera=camera_config,
         mediapipe=hand_tracker_config,
         ui=ui_config,
+        dataset=dataset_config,
     )
 
 
@@ -134,6 +150,15 @@ def _require_mapping(data: dict[str, Any], key: str) -> dict[str, Any]:
     value = data.get(key)
     if not isinstance(value, dict):
         raise ConfigError(f"Раздел '{key}' отсутствует или поврежден.")
+    return value
+
+
+def _optional_mapping(data: dict[str, Any], key: str) -> dict[str, Any] | None:
+    value = data.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ConfigError(f"Раздел '{key}' должен быть YAML-объектом.")
     return value
 
 
@@ -177,8 +202,64 @@ def _require_bool(data: dict[str, Any], key: str) -> bool:
     return value
 
 
+def _require_string_list(data: dict[str, Any], key: str) -> tuple[str, ...]:
+    value = data.get(key)
+    if not isinstance(value, list) or not value:
+        raise ConfigError(f"Поле '{key}' должно быть непустым списком строк.")
+
+    normalized_values: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ConfigError(
+                f"Поле '{key}' должно содержать только непустые строки."
+            )
+        normalized_values.append(item.strip())
+
+    return tuple(normalized_values)
+
+
 def _resolve_model_path(project_root: Path, model_path: str) -> Path:
     path = Path(model_path)
     if not path.is_absolute():
         path = project_root / path
     return path.resolve()
+
+
+def _resolve_path(project_root: Path, raw_path: str) -> Path:
+    path = Path(raw_path)
+    if not path.is_absolute():
+        path = project_root / path
+    return path.resolve()
+
+
+def _build_dataset_config(
+    project_root: Path, dataset_section: dict[str, Any] | None
+) -> DatasetConfig:
+    # Keep stage 01 configs valid by providing dataset defaults.
+    # Сохраняем совместимость с конфигами этапа 01 через значения по умолчанию.
+    default_labels = ("open_palm", "fist", "peace", "thumbs_up")
+
+    if dataset_section is None:
+        return DatasetConfig(
+            raw_dir=(project_root / "data" / "raw").resolve(),
+            index_file=(project_root / "data" / "raw" / "dataset_index.csv").resolve(),
+            gesture_labels=default_labels,
+            capture_interval_ms=250,
+            max_samples_per_label=250,
+            require_single_hand=True,
+        )
+
+    return DatasetConfig(
+        raw_dir=_resolve_path(
+            project_root, _require_non_empty_string(dataset_section, "raw_dir")
+        ),
+        index_file=_resolve_path(
+            project_root, _require_non_empty_string(dataset_section, "index_file")
+        ),
+        gesture_labels=_require_string_list(dataset_section, "gesture_labels"),
+        capture_interval_ms=_require_positive_int(dataset_section, "capture_interval_ms"),
+        max_samples_per_label=_require_positive_int(
+            dataset_section, "max_samples_per_label"
+        ),
+        require_single_hand=_require_bool(dataset_section, "require_single_hand"),
+    )
